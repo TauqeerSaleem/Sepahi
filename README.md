@@ -13,5 +13,4 @@ for const auto& x : range(10)
 
 
 ## Future additions:
-###1. Instead of writing ./sepahi.sh [COMMAND], do sepahi [COMMAND], making it easier for the user to use the psudo-compiler.
-This is not very difficult, all we have to do is make the file executable, and then move it to bin OR add a custom folder to $PATH
+1. Instead of writing ./sepahi.sh [COMMAND], do sepahi [COMMAND], making it easier for the user to use the psudo-compiler. This is not very difficult, all we have to do is make the file executable, and then move it to bin OR add a custom folder to $PATH
