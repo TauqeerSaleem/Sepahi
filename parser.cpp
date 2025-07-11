@@ -12,6 +12,11 @@ bool isControlStatement(const string& line) {
     return regex_search(line, regex("^\\s*(if|else if|else|for|while)\\b"));
 }
 
+// Add ; for stuff like vectors
+bool isBracedInitializer(const string& line) {
+    return regex_match(line, regex(".*=\\s*\\{.*\\}\\s*$"));
+}
+
 // Detects function declarations
 bool isFunctionDeclaration(const string& line) {
     return regex_match(line, regex("^\\s*(int|void|float|double|char|auto|long|short|bool)?\\s*\\w+\\s*\\(.*\\)\\s*$"));
@@ -24,13 +29,24 @@ bool isClassLikeDeclaration(const string& line) {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <output_file.cpp>" << endl;
+        cerr << "Usage: " << argv[0] << " <output_file.cpp> or -" << endl;
         return 1;
     }
 
     istream& infile = cin;
-    ofstream outfile(argv[1]);
-    outfile << "#include <iostream>\nusing namespace std;\n\n";
+    ostream* out;
+    ofstream outfile;
+
+    if (string(argv[1]) == "-") {
+        out = &cout;
+    } else {
+        outfile.open(argv[1]);
+        out = &outfile;
+    }
+
+    (*out) << "#include <iostream>\n"
+           << "#include \"python_for_loop.cpp\"\n"
+           << "using namespace std;\n\n";
 
     string line;
     stack<int> indentStack;
@@ -42,32 +58,44 @@ int main(int argc, char* argv[]) {
         int currentIndent = line.find_first_not_of(" \t");
         if (currentIndent == string::npos) currentIndent = 0;
         string trimmed = regex_replace(line, regex("^\\s+"), "");
+
+        if (trimmed.empty()) {
+            (*out) << endl; // preserve empty line
+            continue;
+        }
+
         string processed = line;
 
-        // Handle: include <...> → #include <...>
+        // include <...> → #include <...>
         if (regex_match(trimmed, regex("^include\\s*<.*>$"))) {
             processed = "#" + trimmed;
         }
-        // Handle: main → int main()
+        // main() → int main()
         else if (regex_match(trimmed, regex("^main\\s*\\(\\s*\\)\\s*$"))) {
             processed = "int main()";
         }
-
+        // if / while / for / else if (Python-style)
+        else if (regex_match(trimmed, regex("^(if|while|for|else if)\\s+.+$"))) {
+            smatch match;
+            regex_search(trimmed, match, regex("^(if|while|for|else if)\\s+(.+)$"));
+            processed = match[1].str() + " (" + match[2].str() + ")";
+        }
+        // else — leave as-is
 
         // Handle indentation decrease
         while (currentIndent < indentStack.top()) {
             indentStack.pop();
             string blockType = blockTypes.top(); blockTypes.pop();
             if (blockType == "class" || blockType == "struct" || blockType == "enum" || blockType == "union") {
-                outfile << string(indentStack.top(), ' ') << "};" << endl;
+                (*out) << string(indentStack.top(), ' ') << "};" << endl;
             } else {
-                outfile << string(indentStack.top(), ' ') << "}" << endl;
+                (*out) << string(indentStack.top(), ' ') << "}" << endl;
             }
         }
 
         // Handle indentation increase (open block)
         if (currentIndent > indentStack.top()) {
-            outfile << " {" << endl;
+            (*out) << "{" << endl;
             indentStack.push(currentIndent);
             if (isClassLikeDeclaration(trimmed)) {
                 blockTypes.push(trimmed.substr(0, trimmed.find(' ')));  // e.g., "class"
@@ -83,15 +111,17 @@ int main(int argc, char* argv[]) {
         bool isIncludeDirective = regex_match(clean, regex("^include\\s+<.*>$"));
         bool isClassOrStruct = isClassLikeDeclaration(clean);
         bool isFunctionDecl = isFunctionDeclaration(clean);
+        bool isElseOrElseIf = regex_match(clean, regex("^else(\\s+if.*)?$"));
         bool endsWithBlockBrace = regex_match(clean, regex(".*[;{}]\\s*$"));
 
         if (!isPreprocessor && !isUsingNamespace && !isIncludeDirective &&
-            !isFunctionDecl && !isClassOrStruct && !endsWithBlockBrace) {
-            processed += ";";
+            !isFunctionDecl && !isClassOrStruct && !isElseOrElseIf) {
+            if (isBracedInitializer(clean) || !endsWithBlockBrace) {
+                processed += ";";
+            }
         }
 
-        // Output processed line
-        outfile << processed << endl;
+        (*out) << processed << endl;
     }
 
     // Close any remaining open blocks
@@ -99,12 +129,14 @@ int main(int argc, char* argv[]) {
         indentStack.pop();
         string blockType = blockTypes.top(); blockTypes.pop();
         if (blockType == "class" || blockType == "struct" || blockType == "enum" || blockType == "union") {
-            outfile << string(indentStack.top(), ' ') << "};" << endl;
+            (*out) << string(indentStack.top(), ' ') << "};" << endl;
         } else {
-            outfile << string(indentStack.top(), ' ') << "}" << endl;
+            (*out) << string(indentStack.top(), ' ') << "}" << endl;
         }
     }
 
-    cout << "Converted output written to " << argv[1] << endl;
+    if (string(argv[1]) != "-")
+        cout << "Converted output written to " << argv[1] << endl;
+
     return 0;
 }
