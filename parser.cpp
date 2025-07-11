@@ -7,12 +7,10 @@
 
 using namespace std;
 
-// Helper to check if a line starts with a control structure
 bool isControlStatement(const string& line) {
     return regex_search(line, regex("^\\s*(if|else if|else|for|while)\\b"));
 }
 
-// Add parentheses to control conditions if missing
 string normalizeControlStatement(const string& line) {
     smatch match;
     if (regex_match(line, match, regex("^\\s*(if|else if|for|while)\\s+(.+)$"))) {
@@ -21,7 +19,10 @@ string normalizeControlStatement(const string& line) {
     return line;
 }
 
-// Adds semicolon if appropriate
+bool isFunctionDeclaration(const string& line) {
+    return regex_match(line, regex("^\\s*(int|void|float|double|char|auto|long|short|bool)?\\s*\\w+\\s*\\(.*\\)\\s*$"));
+}
+
 bool needsSemicolon(const string& line) {
     string trimmed = regex_replace(line, regex("^\\s+|\\s+$"), "");
     if (trimmed.empty() || trimmed.back() == '}' || trimmed.back() == ';')
@@ -29,9 +30,16 @@ bool needsSemicolon(const string& line) {
     return !(isControlStatement(trimmed) || trimmed.back() == '{');
 }
 
-int main() {
-    ifstream infile("input.indpp");  // input file
-    ofstream outfile("output.cpp");  // output file
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        cerr << "Usage: " << argv[0] << " <output_file.cpp>" << endl;
+        return 1;
+    }
+
+    istream& infile = cin;
+    ofstream outfile(argv[1]);
+    outfile << "#include <iostream>\nusing namespace std;\n\n";
+
     string line;
     stack<int> indentStack;
     indentStack.push(0);
@@ -41,19 +49,16 @@ int main() {
         if (currentIndent == string::npos) currentIndent = 0;
         string trimmed = regex_replace(line, regex("^\\s+"), "");
 
-        // Close blocks if indentation decreased
         while (currentIndent < indentStack.top()) {
             indentStack.pop();
             outfile << string(indentStack.top(), ' ') << "}" << endl;
         }
 
-        // Open block if indentation increased
         if (currentIndent > indentStack.top()) {
             outfile << " {" << endl;
             indentStack.push(currentIndent);
         }
 
-        // Process line content
         if (trimmed.empty()) {
             outfile << endl;
             continue;
@@ -64,22 +69,24 @@ int main() {
         if (isControlStatement(trimmed)) {
             processed = regex_replace(line, regex("^(\\s*)(if|else if|for|while)\\s+(.+)$"), "$1$2 ($3)");
         } else if (regex_match(trimmed, regex("^main\\s*$"))) {
-            processed = regex_replace(line, regex("main"), "int main()");
+            processed = regex_replace(trimmed, regex("^main$"), "int main()");
         }
 
-        if (needsSemicolon(processed)) {
+        // Use the latest version (after processing) to decide on semicolon
+        string postTrimmed = regex_replace(processed, regex("^\\s+|\\s+$"), "");
+        if (!isFunctionDeclaration(postTrimmed) && needsSemicolon(postTrimmed)) {
             processed += ";";
         }
+
 
         outfile << processed << endl;
     }
 
-    // Close remaining open blocks
     while (indentStack.size() > 1) {
         indentStack.pop();
         outfile << string(indentStack.top(), ' ') << "}" << endl;
     }
 
-    cout << "Converted output written to output.cpp" << endl;
+    cout << "Converted output written to " << argv[1] << endl;
     return 0;
 }
