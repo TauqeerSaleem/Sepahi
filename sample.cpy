@@ -1,6 +1,6 @@
-include <vector>
-include <string>
-
+include vector
+include string
+include sample_h.cpp
 
 main()
     for const auto& x : range(10)
@@ -9,3 +9,4 @@ main()
         else
             cout << "odd : " << x << endl
     cout << "Done!" << endl
+    cout << say_hello(2) << endl;

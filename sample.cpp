@@ -4,7 +4,7 @@ using namespace std;
 
 #include <vector>
 #include <string>
-
+#include "sample_h.cpp"
 
 int main()
 {
@@ -20,4 +20,5 @@ if (x%2 == 0)
         }
     }
     cout << "Done!" << endl;
+    cout << say_hello(2) << endl;
 }

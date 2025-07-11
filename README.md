@@ -3,21 +3,24 @@ Sepahi (read C-py) is a front-end for C++ with pythonic syntax. The main idea of
 
 1. Write structured code without semicolons (;)
 2. Use indentation instead of {} braces
-3. Skip boilerplate like #include or int main()
+3. Reduce keystrokes from boilerplate code like #include or int main()
 4. Use Python-style control structures (if, for, else) without parentheses
 5. Use a built-in range() function just like Python!
 
 ## A sample code in Sepahi
 ```
-include <vector>
+include vector
+include string
+include sample_h.cpp
 
 main()
-    for auto i : range(0, 10)
-        if i % 2 == 0
-            cout << "even: " << i << endl
+    for const auto& x : range(10)
+        if x%2 == 0
+            cout << "even: " << x << endl
         else
-            cout << "odd : " << i << endl
+            cout << "odd : " << x << endl
     cout << "Done!" << endl
+    cout << say_hello(2) << endl;
 ```
 
 ## How to use?

@@ -67,9 +67,18 @@ int main(int argc, char* argv[]) {
         string processed = line;
 
         // include <...> → #include <...>
-        if (regex_match(trimmed, regex("^include\\s*<.*>$"))) {
-            processed = "#" + trimmed;
+        if (regex_match(trimmed, regex("^include\\s+\\S+$"))) {
+            smatch match;
+            regex_search(trimmed, match, regex("^include\\s+(\\S+)$"));
+            string name = match[1].str();
+            
+            if (regex_match(name, regex(".*\\.(h|hpp|cpp)$"))) {
+                processed = "#include \"" + name + "\"";
+            } else {
+                processed = "#include <" + name + ">";
+            }
         }
+
         // main() → int main()
         else if (regex_match(trimmed, regex("^main\\s*\\(\\s*\\)\\s*$"))) {
             processed = "int main()";
