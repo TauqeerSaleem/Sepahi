@@ -7,27 +7,19 @@
 
 using namespace std;
 
+// Detects control structures (not currently altered, but reserved)
 bool isControlStatement(const string& line) {
     return regex_search(line, regex("^\\s*(if|else if|else|for|while)\\b"));
 }
 
-string normalizeControlStatement(const string& line) {
-    smatch match;
-    if (regex_match(line, match, regex("^\\s*(if|else if|for|while)\\s+(.+)$"))) {
-        return match[1].str() + " (" + match[2].str() + ")";
-    }
-    return line;
-}
-
+// Detects function declarations
 bool isFunctionDeclaration(const string& line) {
     return regex_match(line, regex("^\\s*(int|void|float|double|char|auto|long|short|bool)?\\s*\\w+\\s*\\(.*\\)\\s*$"));
 }
 
-bool needsSemicolon(const string& line) {
-    string trimmed = regex_replace(line, regex("^\\s+|\\s+$"), "");
-    if (trimmed.empty() || trimmed.back() == '}' || trimmed.back() == ';')
-        return false;
-    return !(isControlStatement(trimmed) || trimmed.back() == '{');
+// Detects class/struct/enum/union
+bool isClassLikeDeclaration(const string& line) {
+    return regex_match(line, regex("^\\s*(class|struct|union|enum)\\b.*$"));
 }
 
 int main(int argc, char* argv[]) {
@@ -42,49 +34,75 @@ int main(int argc, char* argv[]) {
 
     string line;
     stack<int> indentStack;
+    stack<string> blockTypes;
     indentStack.push(0);
+    blockTypes.push("root");
 
     while (getline(infile, line)) {
         int currentIndent = line.find_first_not_of(" \t");
         if (currentIndent == string::npos) currentIndent = 0;
         string trimmed = regex_replace(line, regex("^\\s+"), "");
+        string processed = line;
 
-        while (currentIndent < indentStack.top()) {
-            indentStack.pop();
-            outfile << string(indentStack.top(), ' ') << "}" << endl;
+        // Handle: include <...> → #include <...>
+        if (regex_match(trimmed, regex("^include\\s*<.*>$"))) {
+            processed = "#" + trimmed;
+        }
+        // Handle: main → int main()
+        else if (regex_match(trimmed, regex("^main\\s*\\(\\s*\\)\\s*$"))) {
+            processed = "int main()";
         }
 
+
+        // Handle indentation decrease
+        while (currentIndent < indentStack.top()) {
+            indentStack.pop();
+            string blockType = blockTypes.top(); blockTypes.pop();
+            if (blockType == "class" || blockType == "struct" || blockType == "enum" || blockType == "union") {
+                outfile << string(indentStack.top(), ' ') << "};" << endl;
+            } else {
+                outfile << string(indentStack.top(), ' ') << "}" << endl;
+            }
+        }
+
+        // Handle indentation increase (open block)
         if (currentIndent > indentStack.top()) {
             outfile << " {" << endl;
             indentStack.push(currentIndent);
+            if (isClassLikeDeclaration(trimmed)) {
+                blockTypes.push(trimmed.substr(0, trimmed.find(' ')));  // e.g., "class"
+            } else {
+                blockTypes.push("code");
+            }
         }
 
-        if (trimmed.empty()) {
-            outfile << endl;
-            continue;
-        }
+        // SEMICOLON LOGIC
+        string clean = regex_replace(processed, regex("^\\s+|\\s+$"), "");
+        bool isPreprocessor = regex_match(clean, regex("^#.*"));
+        bool isUsingNamespace = regex_match(clean, regex("^using\\s+namespace.*"));
+        bool isIncludeDirective = regex_match(clean, regex("^include\\s+<.*>$"));
+        bool isClassOrStruct = isClassLikeDeclaration(clean);
+        bool isFunctionDecl = isFunctionDeclaration(clean);
+        bool endsWithBlockBrace = regex_match(clean, regex(".*[;{}]\\s*$"));
 
-        string processed = line;
-
-        if (isControlStatement(trimmed)) {
-            processed = regex_replace(line, regex("^(\\s*)(if|else if|for|while)\\s+(.+)$"), "$1$2 ($3)");
-        } else if (regex_match(trimmed, regex("^main\\s*$"))) {
-            processed = regex_replace(trimmed, regex("^main$"), "int main()");
-        }
-
-        // Use the latest version (after processing) to decide on semicolon
-        string postTrimmed = regex_replace(processed, regex("^\\s+|\\s+$"), "");
-        if (!isFunctionDeclaration(postTrimmed) && needsSemicolon(postTrimmed)) {
+        if (!isPreprocessor && !isUsingNamespace && !isIncludeDirective &&
+            !isFunctionDecl && !isClassOrStruct && !endsWithBlockBrace) {
             processed += ";";
         }
 
-
+        // Output processed line
         outfile << processed << endl;
     }
 
+    // Close any remaining open blocks
     while (indentStack.size() > 1) {
         indentStack.pop();
-        outfile << string(indentStack.top(), ' ') << "}" << endl;
+        string blockType = blockTypes.top(); blockTypes.pop();
+        if (blockType == "class" || blockType == "struct" || blockType == "enum" || blockType == "union") {
+            outfile << string(indentStack.top(), ' ') << "};" << endl;
+        } else {
+            outfile << string(indentStack.top(), ' ') << "}" << endl;
+        }
     }
 
     cout << "Converted output written to " << argv[1] << endl;
